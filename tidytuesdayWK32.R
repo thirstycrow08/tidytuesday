@@ -34,7 +34,15 @@ ggplot(energy_latlong, aes(x = long, y = lat))+
   geom_polygon(aes( group = group, fill = type))+
   geom_text(aes(label = country_name), data = country_names,size = 3, hjust = 0.5)+
   theme_minimal()+
-  ggtitle("How European Countries Predominantly Generated Electricity in 2018")+
+  labs(
+    title = paste(
+      "European Energy"
+    ),
+    subtitle = paste(
+      "How European Countries Predominantly Generated Electricity in 2018"
+    ),
+    caption = "Data from https://bit.ly/3a0Pjac"
+  )+
   guides(fill=guide_legend(title=NULL))+  
   scale_fill_brewer(labels=c("Thermal", "Nuclear", "Hydroelectric","Wind"),palette = "Spectral")+
   theme(legend.position="bottom")
