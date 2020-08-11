@@ -34,4 +34,8 @@ avatar_sentiment <- avatar_text %>%
 ggplot(avatar_sentiment, aes(reorder(sentiment,n),n)) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~book, ncol = 2, scales = "free_x")+
-  coord_flip()
+  coord_flip()+
+  labs(title = "Avatar: The Last Airbender",
+       subtitle = "Sentiment analysis of all 3 books based on transcripts",
+       x = "Sentiments (NRC Lexicon)",
+       y = "Count") 
