@@ -31,7 +31,7 @@ avatar_sentiment <- avatar_text %>%
   count(book, index = line_num %/% 80, sentiment)
   
 #Faceted plot of sentiment by book
-ggplot(avatar_sentiment, aes(sentiment,n)) +
+ggplot(avatar_sentiment, aes(reorder(sentiment,n),n)) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~book, ncol = 2, scales = "free_x")+
   coord_flip()
