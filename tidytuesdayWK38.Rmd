@@ -1,0 +1,202 @@
+---
+title: "tidytuesdayWK38"
+author: "Mathew Varghese"
+date: "9/15/2020"
+output: html_document
+---
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(tidytext)
+library(tidytuesdayR)
+library(formattable)
+library(lubridate)
+library(janitor)
+library(rvest)
+library(gt)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+tt_theme <- theme(
+  plot.caption = element_text(hjust = 0), 
+  plot.title = element_text(family = "Helvetica",face = "bold", color = "grey20"),
+  # strip.text = element_text(hjust = 0),
+  panel.background = element_rect(fill="white"),
+  panel.grid.major.y = element_line(colour="#f0f3f4",size=.5),
+  panel.grid.major.x = element_blank(),
+  panel.grid.minor.x = element_blank(),
+  panel.grid.minor.y = element_blank(),
+  panel.border = element_blank(),
+  axis.line.x = element_blank(),
+  # axis.line.x = element_line(colour="#34495e", size=1),
+  strip.background = element_rect(fill="#cacfd2"),
+  # strip.text.y = element_text(size=14, angle=-90, face="bold"),
+  # panel.border = element_rect(colour="blue", fill=NA, size=.5)
+  # panel.grid.minor = element_blank(),
+  # plot.margin=unit(c(0,1,0,1),"cm"),
+  legend.position="bottom",
+  # plot.caption=element_text(hjust=1,size=9,colour="grey30"),
+  plot.subtitle=element_text(face="italic",size=12,colour="grey40")
+  # plot.title=element_text(size=18,face="bold"
+)
+
+colors <- c(
+  "#e67e22",
+  "#c0392b",
+  "#bdc3c7",
+  "#3498db",
+  "#884ea0",
+  "#34495e",
+  "#f1c40f")
+```
+
+```{r}
+#Get the data
+tuesdata <- tidytuesdayR::tt_load(2020, week = 38)
+kids <- tuesdata$kids
+
+```
+## How All States Spent on Kids
+```{r}
+kids %>% 
+  mutate(variable = factor(variable,levels = unique(variable))) %>% 
+  mutate(state = factor(state,levels = unique(state))) %>%
+  # mutate(year = as.Date(year)) %>%
+  # slice_max(raw,n=10) %>% 
+  group_by(year,state) %>% 
+  summarise(total_raw = sum(raw)) %>% 
+  ungroup %>% 
+  filter(!is.na(total_raw)) %>% 
+  ggplot(aes(year,total_raw))+
+  geom_line()+
+  facet_wrap(.~state)+
+  labs(
+    title = "Rise in Spending on Children",
+    subtitle = "TBD",
+    x="",
+    y="Spending",
+    credit = "Friends",
+    size = "Views in Millions",
+    fill = " ",
+    caption = "Tidy Tuesday Week 38                                Mathew Varghese                                   @thirsty_crow"
+  )+
+  tt_theme
+```
+
+
+## Top Expenses
+```{r}
+top5_var <- kids %>% 
+  filter(year == "2016") %>% 
+  group_by(variable) %>% 
+  summarise(total = sum(inf_adj_perchild)) %>% 
+  filter(!is.na(total)) %>% 
+  ungroup() %>% 
+  slice_max(total,n=5) %>% 
+  mutate(total = round(total,2))
+
+top5_var %>% 
+mutate(variable = fct_reorder(variable,total)) %>% 
+  ggplot(aes(variable))+
+  geom_col(aes(y=total))+
+  coord_flip()
+```
+
+## State List 
+List of all 50 states with leading pol party and per capita GDP.
+```{r}
+webpage <- read_html("https://en.wikipedia.org/wiki/Political_party_strength_in_U.S._states")
+
+tab <- webpage %>% html_nodes("table")
+
+state_pol <- tab[[4]] %>% 
+  html_table %>%
+  clean_names() %>% 
+  rename(pol_party = 2) %>% 
+  select(1,2) %>% 
+  arrange(state)
+
+us_State_gdp <- read_html("https://en.wikipedia.org/wiki/List_of_states_and_territories_of_the_United_States_by_GDP")
+
+gdp_tab <- us_State_gdp %>% html_nodes("table")
+
+state_gdp <- gdp_tab[[3]] %>% 
+  html_table %>% 
+  clean_names() %>% 
+  select(2,5) %>% 
+  rename("state" = 1,"gdp_pc" = 2) %>% 
+  arrange(state)
+
+
+abbreviations <- read_html("https://about.usps.com/who-we-are/postal-history/state-abbreviations.htm")
+
+abbr <- abbreviations %>% html_nodes("table")
+
+state_abbr <- abbr[[1]] %>% 
+  html_table %>%
+  clean_names() %>% 
+  # rename(pol_party = 2) %>% 
+  select(1,6) %>% 
+  rename(state = 1,abbr=2) %>% 
+  mutate(abbr1 = substr(abbr,1,2)) %>% 
+  filter(state != "" & abbr != "Postal Abbreviations for States/Territories")  %>% 
+  select(1,3) %>% 
+  arrange(state) 
+
+population <- read_html("https://www.infoplease.com/us/states/state-population-by-rank")
+
+pop <- population %>% 
+  html_nodes("table")
+
+state_pop <- pop[[1]] %>% 
+  html_table() %>%
+  clean_names() %>%
+  rename(pop = 3) %>% 
+  select(2,3) %>% 
+  arrange(state) 
+
+state_list <- left_join(state_pol,state_gdp,by = "state") %>% 
+  left_join(state_abbr,by="state") %>% 
+  left_join(state_pop,by="state")
+
+gt(state_list)
+```
+## Plotting the Data
+```{r}
+
+kids %>% 
+  filter(year == max(year) &
+           variable %in% top5_var$variable) %>% 
+    mutate(variable = fct_recode(variable,
+    "Elementary & Secondary"="PK12ed",
+    "Health Vendor & Pub. Hosp."="other_health",
+    "Medicaid & CHIP"="Medicaid_CHIP",
+    "Higher Education"="highered",
+    "Cash Assist.& Soc. Svc."="othercashserv"
+  )) %>% 
+  left_join(state_list,by="state") %>% 
+  select(-3,-4,-5) %>% 
+  mutate(inf_adj_perchild = round(inf_adj_perchild,2)) %>% 
+  mutate(gdp_pc = (as.numeric(gsub(",","",gdp_pc))/1000)) %>% 
+  mutate(pop = (as.numeric(gsub(",","",pop))/1000000)) %>% 
+  filter(!is.na(pol_party)) %>% 
+  ggplot(aes(inf_adj_perchild,gdp_pc,col=pol_party,size=pop))+
+  geom_point(alpha = .6)+
+  geom_rug(position="jitter", size=.2)+
+  geom_text(aes(y=gdp_pc,label = abbr1),size = 2,col="black")+
+  facet_wrap(.~variable,scales="free")+
+  scale_color_manual(labels = c("Democratic","Republican"),values = c("#498DCB","#F05B4E"))+
+  labs(
+    title = "Public Spending on Children in 2016",
+    subtitle = "Top-5 child-related public expenses in all 50 states.",
+    x="Inflation Adjusted Per Capita Expense",
+    y="Per Capita GDP (thousand dollars)",
+    color = "Leading Political Party",
+    size = "Population",
+    credit = "Urban Institute & Joshua Rosenberg",
+    alpha = ""
+  )+
+  tt_theme
+
+```
+
