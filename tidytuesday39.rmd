@@ -1,0 +1,198 @@
+---
+title: "Tidy Tuesday"
+subtitle: "Week 39"
+output:
+  html_document: 
+    toc: yes
+    fig_caption: yes
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(ggrepel)
+require(psych)
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(formattable)
+library(tidyr)
+library(readr)
+library(readxl) 
+library(janitor)
+library(gt)
+library(gtsummary)
+library(readxl)
+library(gt)
+library(glue)
+library(stringr)
+library(magick)
+library(hrbrthemes)
+library(skimr)
+library(Hmisc)
+library(tidytuesdayR)
+# library(summarytools)
+# library(GGally)
+
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```{r theme}
+tt_theme <- 
+  theme(
+  # panel.background = element_rect(fill="white"),
+  # strip.background = element_rect(fill="#555555"),
+  # strip.text = element_text(hjust = 0,colour="#D9D9D9",face="bold"),
+  axis.line.x = element_line(colour="#555555", size=1),
+  axis.text.x = element_text(angle=30, hjust=1, vjust=.5),
+  panel.grid.major.y = element_line(colour="#D9D9D9",size=.1),
+  panel.grid.major.x = element_line(colour="#abb2b9",size=.1),
+  panel.grid.minor.x = element_blank(),
+  panel.grid.minor.y = element_blank(),
+  plot.caption = element_text(color = "#34495e", face = 'bold'),
+  panel.border = element_blank(),
+  # panel.border = element_rect(colour="#D9D9D9", fill=NA, size=.1),
+  # axis.line.y = element_blank(),
+  # strip.background = element_rect(fill="#5f6a6a"),
+  # strip.text.y = element_text(size=14, angle=-90, face="bold"),
+  # panel.border = element_rect(colour="blue", fill=NA, size=.5)
+  # panel.grid.minor = element_blank(),
+  # plot.margin=unit(c(0,1,0,1),"cm"),
+  legend.position="right",
+  # legend.position="bottom",
+  # plot.caption=element_text(hjust=1,size=9,colour="grey30"),
+  plot.subtitle=element_text(face="italic",size=12,colour="grey40")
+  # plot.title=element_text(size=18,face="bold"
+)
+
+colors <- c(
+  "#3498db",  
+  "#c0392b",
+  "#bdc3c7",
+  "#e67e22",
+  "#884ea0",
+  "#34495e",
+  "#f1c40f")
+```
+
+
+# Data Overview (skim)
+```{r}
+tuesdata <- tidytuesdayR::tt_load(2020, week = 39)
+
+members <- tuesdata$members
+expeditions <- tuesdata$expeditions
+peaks <- tuesdata$peaks
+
+skim(members)
+
+skim(expeditions)
+
+skim(peaks)
+```
+
+# Top 10 Peaks 
+This chart shows the top 10 peaks with the death zone indicated by a red horizontal line.
+
+```{r}
+p1 <- peaks %>% 
+  mutate(peak_name = factor(peak_name,levels = unique(peak_name))) %>% 
+  slice_max(height_metres,n=10) %>% 
+  ggplot(aes(fct_reorder(peak_name,height_metres),height_metres))+
+  geom_col()+
+  geom_hline(aes(yintercept = 8000,col="red"))+
+  theme_ipsum()+
+  tt_theme
+
+```
+
+# Death on the Top 10 Tallest Mountains
+
+```{r}
+peaks_clean <- peaks %>% 
+  mutate(peak_name = factor(peak_name,levels = unique(peak_name))) %>% 
+  # slice_max(height_metres,n=12) %>%
+  arrange(desc(height_metres)) %>%
+  select(2,4)
+
+
+members %>% 
+  mutate(peak_name = factor(peak_name,levels = unique(peak_name))) %>% 
+  left_join(peaks_clean,by ="peak_name") %>% 
+  semi_join(peaks_clean,by="peak_name") %>% 
+  ggplot(aes(peak_name,death_height_metres))+
+  geom_point(position = "jitter",aes(col=death_cause))+
+  geom_hline(aes(yintercept = 8000,col="red"))+
+  coord_flip()+
+  theme_ipsum()+
+  tt_theme
+```
+
+# Killer Dozen: Top 12 Peaks With Most Deaths
+
+```{r fig.height=6, fig.width=10}
+killer_dozen <- members %>% 
+  mutate(peak_name = factor(peak_name,levels = unique(peak_name))) %>% 
+  filter(died == "TRUE") %>% 
+  count(peak_name) %>% 
+  # arrange(desc(n))
+  slice_max(n,n=12)
+
+everest_caption <- paste(strwrap("Everest's popularity attracts many inexperienced climbers. Many of them die in the infamous death zone due to exhaustion, AMS and exposure.", 
+                                   40,
+                                   indent = 2), 
+                           collapse = "\n")
+
+members %>% 
+  mutate(peak_name = factor(peak_name,levels = unique(peak_name))) %>% 
+  left_join(killer_dozen,by ="peak_name") %>% 
+  semi_join(killer_dozen,by="peak_name") %>% 
+  filter(died == "TRUE") %>% 
+  mutate(death_cause = fct_recode(death_cause,
+                                  "Exhaustion/Respiration" = "AMS",
+                                  "Exhaustion/Respiration" = "Exhaustion",
+                                  "Exhaustion/Respiration" = "Exposure / frostbite",
+                                  "Exhaustion/Respiration" = "Illness(non-AMS)",
+                                  "Accident" = "Crevasse",
+                                  "Accident" = "Avalanche",
+                                  "Accident" = "Fall",
+                                  "Accident" = "Falling rock / ice",
+                                  "Accident" = "Icefall collapse",
+                                  "Other" = "Disappearance (unexplained)",
+                                  "Other" = "Other",
+                                  "Other" = "Unknown"
+                                  )) %>%
+  ggplot(aes(peak_name,death_height_metres))+
+  geom_point(position = "jitter",aes(col=death_cause))+
+  ylim(4000,10000)+
+  annotate("rect", xmin=0, xmax=13, ymin=8000, ymax=10000, alpha=.2,fill="#85c1e9")+
+  annotate("text", x=.75, y=9700, label="Death Zone",color = "#2874a6") +
+  annotate(geom = "text",
+           x=3,
+           y=9300,
+           label=everest_caption,
+           family="sans serif",
+           colour="red",
+           size=3) +
+  geom_curve(aes(x = 3.3, y = 8800, xend = 4.3, yend = 8500),
+             curvature = 0.5,
+             colour = "red",
+            arrow = arrow(length = unit(0.03, "npc")))+
+  scale_color_manual(values = colors)+
+  theme_ipsum()+
+  tt_theme+
+  labs(
+    x="Name of Peak",
+    y="Height (meters)",
+    color = "Cause of Death",
+    title = "The Killer Dozen",
+    subtitle = "The most common cause of death in the 12 deadliest Himalayan peaks was accidents",
+    caption = "Source: The Himalayan Database | TidyTuesday Week 39 \n Created: Mathew Varghese | @thirsty_crow"
+    
+  )
+```
+
+
